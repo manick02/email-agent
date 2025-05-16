@@ -1,5 +1,6 @@
 import os
 import time
+import argparse  # <-- Add this import
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
@@ -114,5 +115,14 @@ class GmailPoller:
             print("\n🛑 Polling stopped by user")
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Gmail Poller")
+    parser.add_argument(
+        "--interval",
+        type=int,
+        default=5,
+        help="Polling interval in minutes (default: 5)"
+    )
+    args = parser.parse_args()
+
     poller = GmailPoller()
-    poller.start_polling(interval_minutes=5)
+    poller.start_polling(interval_minutes=args.interval)

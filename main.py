@@ -5,8 +5,10 @@ from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
+from langchain_mistralai import ChatMistralAI   
 import schedule
-
+from email_classifier import EmailClassifier
+import base64
 # Expanded scopes to allow read + modify actions
 SCOPES = [
     "https://www.googleapis.com/auth/gmail.readonly",
@@ -16,9 +18,13 @@ SCOPES = [
 CLIENT_SECRET="credentials.json"
 TOKEN = "token.json"
 
+
+
+
 class GmailPoller:
-    def __init__(self):
+    def __init__(self,email_classifier):
         self.service = self._authenticate()
+        self.email_classifier = email_classifier
 
     def _authenticate(self):
         """Handles OAuth 2.0 authentication with modify permissions."""
@@ -43,6 +49,23 @@ class GmailPoller:
                 token.write(creds.to_json())
 
         return build("gmail", "v1", credentials=creds)
+    
+    def get_email_body(self, payload):
+        """Extracts the email body from the payload."""
+        return ""
+    
+     # def get_email_body(self,payload):
+        # if "parts" in payload:
+        #     # Multi-part email (plain text + HTML)
+        #     for part in payload["parts"]:
+        #         if part["mimeType"] == "text/plain":
+        #             data = part["body"]["data"]
+        #             return base64.urlsafe_b64decode(data).decode("utf-8")
+        # else:
+        #     # Single-part email
+        #     data = payload["body"]["data"]
+        #     return base64.urlsafe_b64decode(data).decode("utf-8")
+        #   return ""
 
     def poll_new_emails(self):
         """Fetches new emails and can modify them (mark as read, etc.)."""
@@ -80,10 +103,14 @@ class GmailPoller:
                 sender = next(
                     (h["value"] for h in headers if h["name"] == "From"), "Unknown Sender"
                 )
+               
+                msg_body = self.get_email_body(email["payload"])
+                classified = self.email_classifier.classify_email(msg_body,sender,subject)
 
                 print(f"\n📩 From: {sender}")
                 print(f"📌 Subject: {subject[:80]}...")
                 print(f"🔗 ID: {msg['id']}")
+                print(f"🔖 Classified Label: {classified}"  )
 
                 # Example: Mark as read by removing UNREAD label
                 self.service.users().messages().modify(
@@ -116,6 +143,8 @@ class GmailPoller:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Gmail Poller")
+    llm=ChatMistralAI(model="mistral:7b-instruct", temperature=0.0, endpoint="http://localhost:11434/v1")
+    email_classifier = EmailClassifier(llm) 
     parser.add_argument(
         "--interval",
         type=int,
@@ -124,5 +153,5 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
-    poller = GmailPoller()
+    poller = GmailPoller(email_classifier=email_classifier)
     poller.start_polling(interval_minutes=args.interval)

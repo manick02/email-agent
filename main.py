@@ -4,83 +4,39 @@ import argparse
 from langchain_mistralai import ChatMistralAI   
 import schedule
 from email_classifier import EmailClassifier
-import base64
-from credential_manager import get_gmail_service  # <-- Import here
+from email_tools import EmailTools, EmailContentRequest  # <-- Use email_tools
 
 class GmailPoller:
     def __init__(self, email_classifier):
-        self.service = get_gmail_service()  # <-- Use the refactored function
         self.email_classifier = email_classifier
-
-    def get_email_body(self, payload):
-        """Extracts the email body from the payload."""
-        return ""
-    
-     # def get_email_body(self,payload):
-        # if "parts" in payload:
-        #     # Multi-part email (plain text + HTML)
-        #     for part in payload["parts"]:
-        #         if part["mimeType"] == "text/plain":
-        #             data = part["body"]["data"]
-        #             return base64.urlsafe_b64decode(data).decode("utf-8")
-        # else:
-        #     # Single-part email
-        #     data = payload["body"]["data"]
-        #     return base64.urlsafe_b64decode(data).decode("utf-8")
-        #   return ""
+        self.email_tools = EmailTools()  # Use EmailTools for all Gmail operations
 
     def poll_new_emails(self):
         """Fetches new emails and can modify them (mark as read, etc.)."""
         try:
             print(f"\nChecking emails at {time.strftime('%Y-%m-%d %H:%M:%S')}")
+            msg_ids = self.email_tools.check_unread_emails("polling")
 
-            # Fetch unread messages
-            result = (
-                self.service.users()
-                .messages()
-                .list(userId="me", labelIds=["INBOX", "UNREAD"], maxResults=5)
-                .execute()
-            )
-            messages = result.get("messages", [])
-
-            if not messages:
+            if not msg_ids:
                 print("No new emails found.")
                 return
 
-            print(f"Found {len(messages)} new email(s):")
+            print(f"Found {len(msg_ids)} new email(s):")
 
-            for msg in messages:
-                # Get email metadata
-                email = (
-                    self.service.users()
-                    .messages()
-                    .get(userId="me", id=msg["id"], format="metadata")
-                    .execute()
+            for msg_id in msg_ids:
+                content = self.email_tools.get_email_content(
+                    EmailContentRequest(message_id=msg_id)
+                )
+                classified = self.email_classifier.classify_email(
+                    content.body, content.sender, content.subject
                 )
 
-                headers = email["payload"]["headers"]
-                subject = next(
-                    (h["value"] for h in headers if h["name"] == "Subject"), "(No Subject)"
-                )
-                sender = next(
-                    (h["value"] for h in headers if h["name"] == "From"), "Unknown Sender"
-                )
-               
-                msg_body = self.get_email_body(email["payload"])
-                classified = self.email_classifier.classify_email(msg_body,sender,subject)
+                print(f"\n📩 From: {content.sender}")
+                print(f"📌 Subject: {content.subject[:80]}...")
+                print(f"🔗 ID: {content.message_id}")
+                print(f"🔖 Classified Label: {classified}")
 
-                print(f"\n📩 From: {sender}")
-                print(f"📌 Subject: {subject[:80]}...")
-                print(f"🔗 ID: {msg['id']}")
-                print(f"🔖 Classified Label: {classified}"  )
-
-                # Example: Mark as read by removing UNREAD label
-                self.service.users().messages().modify(
-                    userId="me",
-                    id=msg["id"],
-                    body={"removeLabelIds": ["UNREAD"]}
-                ).execute()
-                print("✅ Marked as read")
+                # Optionally, implement mark_as_read in EmailTools if needed
 
         except Exception as e:
             print(f"⚠️ Error: {e}")
@@ -105,7 +61,7 @@ class GmailPoller:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Gmail Poller")
-    llm=ChatMistralAI(model="mistral:7b-instruct", temperature=0.0, endpoint="http://localhost:11434/v1")
+    llm = ChatMistralAI(model="mistral:7b-instruct", temperature=0.0, endpoint="http://localhost:11434/v1")
     email_classifier = EmailClassifier(llm) 
     parser.add_argument(
         "--interval",

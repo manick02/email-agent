@@ -1,55 +1,17 @@
 import os
 import time
-import argparse  # <-- Add this import
-from google.auth.transport.requests import Request
-from google.oauth2.credentials import Credentials
-from google_auth_oauthlib.flow import InstalledAppFlow
-from googleapiclient.discovery import build
+import argparse
 from langchain_mistralai import ChatMistralAI   
 import schedule
 from email_classifier import EmailClassifier
 import base64
-# Expanded scopes to allow read + modify actions
-SCOPES = [
-    "https://www.googleapis.com/auth/gmail.readonly",
-    "https://www.googleapis.com/auth/gmail.modify"  # Allows marking as read, archiving, etc.
-]
-
-CLIENT_SECRET="credentials.json"
-TOKEN = "token.json"
-
-
-
+from credential_manager import get_gmail_service  # <-- Import here
 
 class GmailPoller:
-    def __init__(self,email_classifier):
-        self.service = self._authenticate()
+    def __init__(self, email_classifier):
+        self.service = get_gmail_service()  # <-- Use the refactored function
         self.email_classifier = email_classifier
 
-    def _authenticate(self):
-        """Handles OAuth 2.0 authentication with modify permissions."""
-        creds = None
-
-        # Load existing token if available
-        if os.path.exists("token.json"):
-            creds = Credentials.from_authorized_user_file(TOKEN, SCOPES)
-
-        # If no valid token, run the OAuth flow
-        if not creds or not creds.valid:
-            if creds and creds.expired and creds.refresh_token:
-                creds.refresh(Request())
-            else:
-                flow = InstalledAppFlow.from_client_secrets_file(
-                   CLIENT_SECRET, SCOPES
-                )
-                creds = flow.run_local_server(port=0)  # Auto-handles OAuth flow
-
-            # Save the token for next time
-            with open(TOKEN, "w") as token:
-                token.write(creds.to_json())
-
-        return build("gmail", "v1", credentials=creds)
-    
     def get_email_body(self, payload):
         """Extracts the email body from the payload."""
         return ""

@@ -8,6 +8,13 @@ class EmailClassifier:
 
     def classify_email(self, email_text, sender_email, email_subject):
         prompt =f"""
+        You are a helpful personal assistant who shileds me from distraction, spam, marketing, and other unwanted emails.
+        I am more interested in knowing whether an email is related to any job opportunity, or bill payment.
+        If the email is from recruiter or job portal or has any job-related keywords, classify it as "job".
+        If the email is about a bill payment remainder or contains potential invoice, classify as "bill".
+        Everything else you can generelally classify into one of the thre "marketing", "advertisement", or "noise".
+        You are not allowed to classify any email as "work" or "job" unless it is explicitly related to job opportunity.
+        You are not allowed to classify any email as "bill" unless it is explicitly related to bill payment.
         Classify the following email into one of these categories: **work, job, bill, noise**.  
         Use both the email content AND the sender/recipient information to determine the most appropriate label.
 
